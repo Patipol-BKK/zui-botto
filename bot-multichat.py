@@ -6,10 +6,13 @@ import functools
 import typing
 import asyncio
 from dotenv import load_dotenv
+import hashlib
+import random
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
+SECURITY_PROMPT = os.getenv('SECURITY_PROMPT')
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -30,10 +33,14 @@ def init_intent():
         'chat_gpt' : False,
         'model' : 'gpt-3.5-turbo',
         'chat_msgs' : [],
-        'command_txt' : {'role' : 'system', 'content' : 'You are an AI assistant. Please also include the language of your code block outputs in the backticks syntax without space in between.'},
+        'command_txt' : {'role' : 'system', 'content' : SECURITY_PROMPT},
         'current_token' : 0,
+        'key' : '',
+        'users' : [],
         'token_limit' : 2000
     }
+
+secret = 'abbb'
 
 def format_msg(role: str, msg: str):
     return {"role": role, "content": msg}
@@ -72,6 +79,7 @@ async def on_message(message):
     global channel_intents
     if intent_id not in channel_intents:
         channel_intents[intent_id] = init_intent()
+        channel_intents[intent_id]['key'] = str(random.random())
 
     print(f'{message.author}: {message.content}')
     if len(message.content) > 0:
@@ -103,8 +111,8 @@ async def on_message(message):
                 elif cmd[:16] == 'set systemprompt':
                     prompt = cmd[16:]
                     if prompt == ' default':
-                        channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : 'You are an AI assistant. Please also include the language of your code block outputs in the backticks syntax without space in between.'}
-                    else: channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : prompt}
+                        channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : SECURITY_PROMPT}
+                    else: channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : SECURITY_PROMPT + ' ' + prompt}
 
                     embedVar = discord.Embed(title=f"System prompt set as : {prompt[:220]}", color=0x22f5dc)
                     await channel.send(embed=embedVar, reference=message, mention_author=False)
@@ -122,9 +130,35 @@ async def on_message(message):
             if len(message.content) > 1:
                 cmd = message.content[1:]
                 if channel_intents[intent_id]['chat_gpt']:
-                    msg = cmd
+                    key_bytes = channel_intents[intent_id]['key'].encode('utf-8')
+
+                    text_bytes = str(message.author).encode('utf-8')
+                    encrypted_author = hashlib.sha256(text_bytes + key_bytes).hexdigest()
+                    print(encrypted_author)
+
+                    msg =   f'{encrypted_author}: {cmd}'
                     channel_intents[intent_id]['chat_msgs'].append({'role' : 'user', 'content' : msg})
-                    response = await generate(model=channel_intents[intent_id]['model'], messages=[channel_intents[intent_id]['command_txt']] + channel_intents[intent_id]['chat_msgs'])
+
+                    if not str(message.author) in channel_intents[intent_id]['users']:
+                        channel_intents[intent_id]['users'].append(str(message.author))
+
+                    if channel_intents[intent_id]['users'] == []:
+                        command_txt = [channel_intents[intent_id]['command_txt']]
+
+                    else:
+                        command_txt_list = [channel_intents[intent_id]['command_txt']['content'] + ' Instead, please refer to ']
+                        for user in channel_intents[intent_id]['users']:
+
+                            text_bytes = user.encode('utf-8')
+                            encrypted_user = hashlib.sha256(text_bytes + key_bytes).hexdigest()
+
+                            command_txt_list.append(f'{encrypted_user} as {user[:-5]}, ')
+                            print(encrypted_user)
+                        command_txt_list[:-1].append('.')
+                        command_txt = {'role' : 'system', 'content' : "".join(command_txt_list)}
+                    print(msg)
+                    print(command_txt)
+                    response = await generate(model=channel_intents[intent_id]['model'], messages=[command_txt] + channel_intents[intent_id]['chat_msgs'])
 
                     response_msg = response.choices[0].message.content
                     used_tokens = response.usage.total_tokens
