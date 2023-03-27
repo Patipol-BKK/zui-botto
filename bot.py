@@ -6,10 +6,14 @@ import functools
 import typing
 import asyncio
 from dotenv import load_dotenv
+import datetime
+import re
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
+
+DEFAULT_PROMPT = os.getenv('DEFAULT_PROMPT')
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -19,6 +23,24 @@ intents.members = True
 
 client = discord.Client(intents=intents)
 
+emotes_dict = {
+    '751668390455803994': '(Cat smiling and crying and putting thumb up emote)',
+    '751668390455803995': '(Cat smiling and crying and putting thumb down emote)',
+    'wat': '(Usada Pekora saying "wat?" emote)',
+    'wuuuaaat': '(Usada Pekora saying "whattttttt!!!?" emote)',
+    'urrrrrrrr':'(Usada Pekora being frustrated emote)',
+    '602092952159780874': '(huh? emote)',
+    '884491552594985080': '("brain not working" emote)',
+    'Abbbbbbb': '(dab emote)',
+    'CuteQuestion':'(person having a question emote)',
+    'Waow': '(Wow! emote)',
+    'xdw':'(xD emote)',
+    'xd':'(xD emote)',
+    'Deb':'(fox girl dabbing emote)',
+    'toad':'(toad dancing emote)',
+    'no':'(no emote)',
+}
+
 def to_thread(func: typing.Callable) -> typing.Coroutine:
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
@@ -27,10 +49,10 @@ def to_thread(func: typing.Callable) -> typing.Coroutine:
 
 def init_intent():
     return {
-        'chat_gpt' : False,
+        'chat_gpt' : True,
         'model' : 'gpt-3.5-turbo',
         'chat_msgs' : [],
-        'command_txt' : {'role' : 'system', 'content' : 'You are an AI assistant. Please also include the language of your code block outputs in the backticks syntax without space in between.'},
+        'command_txt' : {'role' : 'system', 'content' : DEFAULT_PROMPT},
         'current_token' : 0,
         'token_limit' : 2000
     }
@@ -38,9 +60,46 @@ def init_intent():
 def format_msg(role: str, msg: str):
     return {"role": role, "content": msg}
 
+def contains_botto(message):
+    return message.find('[zui-botto]:')
+
 @to_thread
 def generate(model, messages):
     return openai.ChatCompletion.create(model=model, messages=messages)
+
+def find_gpt_botto(message):
+    gpt_indices = []
+    botto_indices = []
+
+    i = message.find('[zui-botto]')
+    while i != -1:
+        botto_indices.append(i)
+        i = message.find('[zui-botto]', i + 1)
+
+    i = message.find('[GPT]')
+    while i != -1:
+        gpt_indices.append(i)
+        i = message.find('[GPT]', i + 1)
+
+    chat_indicies = []
+    for botto_idx in botto_indices:
+        chat_indicies.append((botto_idx, 'zui-botto'))
+
+    for gpt_idx in gpt_indices:
+        chat_indicies.append((gpt_idx, 'gpt'))
+
+    chat_indicies.sort()
+    if len(botto_indices) != 1 or len(gpt_indices) != 1:
+        correction_needed = True
+    else:
+        if botto_indices[0] < gpt_indices[0]:
+            correction_needed = True
+    return gpt_indices, botto_indices
+
+def get_gpt_botto_msg(message, gpt_indices, botto_indices):
+    gpt_messages = []
+    botto_mesages = []
+
 
 @client.event
 async def on_ready():
@@ -57,12 +116,12 @@ channel_intents = {}
 
 @client.event
 async def on_message(message):
-    if not 'bot' in str(message.channel):
-        return
     if message.author.bot:
-        return
+            return
     try:
         guild_id = message.guild.id
+        if not ('bot' in str(message.channel) or 'gpt' in str(message.channel) or 'chat' in str(message.channel)):
+            return
     except:
         guild_id = 'dm'
     channel = message.channel
@@ -103,7 +162,7 @@ async def on_message(message):
                 elif cmd[:16] == 'set systemprompt':
                     prompt = cmd[16:]
                     if prompt == ' default':
-                        channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : 'You are an AI assistant. Please also include the language of your code block outputs in the backticks syntax without space in between.'}
+                        channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : DEFAULT_PROMPT}
                     else: channel_intents[intent_id]['command_txt'] = {'role' : 'system', 'content' : prompt}
 
                     embedVar = discord.Embed(title=f"System prompt set as : {prompt[:220]}", color=0x22f5dc)
@@ -118,13 +177,36 @@ async def on_message(message):
                 #     embedVar = discord.Embed(title="Commands List:", color=0x22f5dc)
                 #     embedVar.add_field(name="ChatGPT Commands", value="`!newchat` to start a new conversation, use the '` key' before any messages to talk to the bot.", inline=False)
                 #     await channel.send(embed=embedVar)
-        elif message.content[0] == '`':
-            if len(message.content) > 1:
-                cmd = message.content[1:]
+        elif message.content[0] == '`' or guild_id == 'dm':
+            if len(message.content) > 1 or guild_id == 'dm':
+                if guild_id != 'dm':
+                    cmd = message.content[1:]
+                else:
+                    cmd = message.content
                 if channel_intents[intent_id]['chat_gpt']:
                     msg = cmd
-                    channel_intents[intent_id]['chat_msgs'].append({'role' : 'user', 'content' : msg})
-                    response = await generate(model=channel_intents[intent_id]['model'], messages=[channel_intents[intent_id]['command_txt']] + channel_intents[intent_id]['chat_msgs'])
+                    for key in emotes_dict.keys():
+                        msg = re.sub(key, emotes_dict[key], msg)
+                    msg = re.sub(r"<:\(", "(", msg)
+                    msg = re.sub(":[0-9]*>", "", msg)
+
+                    current_chat_msgs = channel_intents[intent_id]['chat_msgs'] + [{'role' : 'user', 'content' : msg}]
+                    with open('loading.gif', 'rb') as f:
+                        picture = discord.File(f)
+                        loading_msg = await channel.send('<a:pluzzlel:959061506568364042>', reference=message, mention_author=False)
+                    # loading_msg = await channel.send(file=picture, reference=message, mention_author=False)
+
+
+                    updated_system_prompt = channel_intents[intent_id]['command_txt']
+                    updated_system_prompt['content'] += ' For reference, the current time is ' + str(datetime.datetime.utcnow())
+
+                    completed = False
+                    while not completed:
+                        try:
+                            response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + channel_intents[intent_id]['chat_msgs'] + [{'role' : 'user', 'content' : msg}])
+                            completed = True
+                        except:
+                            channel_intents[intent_id]['chat_msgs'] = channel_intents[intent_id]['chat_msgs'][2:]
 
                     response_msg = response.choices[0].message.content
                     used_tokens = response.usage.total_tokens
@@ -135,7 +217,126 @@ async def on_message(message):
                     if used_tokens > channel_intents[intent_id]['token_limit']:
                         channel_intents[intent_id]['chat_msgs'] = channel_intents[intent_id]['chat_msgs'][2:]
 
+                    channel_intents[intent_id]['chat_msgs'].append({'role' : 'user', 'content' : msg})
                     channel_intents[intent_id]['chat_msgs'].append({'role' : 'assistant', 'content' : response_msg})
+
+                    # gpt_indices, botto_indices = find_gpt_botto(response_msg)
+
+                    # i = response_msg.find('[zui-botto]')
+                    # while i != -1:
+                    #     botto_indices.append(i)
+                    #     i = response_msg.find('[zui-botto]', i + 1)
+
+                    # i = response_msg.find('[GPT]')
+                    # while i != -1:
+                    #     gpt_indices.append(i)
+                    #     i = response_msg.find('[GPT]', i + 1)
+
+                    # chat_indicies = []
+                    # for botto_idx in botto_indices:
+                    #     chat_indicies.append((botto_idx, 'zui-botto'))
+
+                    # for gpt_idx in gpt_indices:
+                    #     chat_indicies.append((gpt_idx, 'gpt'))
+
+                    # chat_indicies.sort()
+                    # if len(botto_indices) != 1 or len(gpt_indices) != 1:
+                    #     correction_needed = True
+                    # else:
+                    #     if botto_indices[0] < gpt_indices[0]:
+                    #         correction_needed = True
+
+                    # if len(botto_indices) == 0:
+                    #     gpt_outputs = []
+                    #     for idx in range(len(gpt_indices) - 1):
+                    #         gpt_output.append(response_msg[gpt_outputs[idx] + 5:gpt_outputs[idx+1]])
+                    #     gpt_out_string = "\n\n".join(gpt_outputs)
+
+                    #     uncorrected_chat_msgs = current_chat_msgs + [{'role' : 'user', 'content' : msg}] + [{'role' : 'assistant', 'content' : response_msg}]
+                    #     uncorrected_chat_msgs.append({'role' : 'user', 'content' : 'Stay in character! Please continue as zui-botto and follow the format in those sentences'})
+                    #     correction_response = await generate(model=channel_intents[intent_id]['model'], messages=[channel_intents[intent_id]['command_txt']] + uncorrected_chat_msgs)
+
+                    #     correction_response_msg = correction_response.choices[0].message.content
+                    #     correction_fixed_msg = '[GPT]: ' + gpt_out_string + '\n\n' + '[zui-botto]: ' + correction_response_msg
+                    #     channel_intents[intent_id]['chat_msgs'].append({'role' : 'assistant', 'content' : correction_response_msg})
+                    #     print(f'Correction Response : {correction_response_msg}')
+
+                    if updated_system_prompt['content'].find('zui-botto') != -1:
+
+                        botto_idx = contains_botto(response_msg)
+                        if botto_idx == -1:
+                            gpt_idx = response_msg.find('[GPT]:')
+
+                            if gpt_idx == -1:
+                                pass
+                            else:
+                                response_msg = response_msg[gpt_idx + 7:]
+
+                            updated_system_prompt = channel_intents[intent_id]['command_txt']
+                            updated_system_prompt['content'] += ' For reference, the current time is ' + str(datetime.datetime.utcnow())
+
+                            channel_intents[intent_id]['chat_msgs'].append({'role' : 'user', 'content' : 'Stay in character! Please continue as zui-botto and follow the format in those sentences'})
+                            completed = False
+                            while not completed:
+                                try:
+                                    correction_response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + channel_intents[intent_id]['chat_msgs'])
+                                    completed = True
+                                except:
+                                    channel_intents[intent_id]['chat_msgs'] = channel_intents[intent_id]['chat_msgs'][2:]
+                            correction_response_msg = correction_response.choices[0].message.content
+                            channel_intents[intent_id]['chat_msgs'].append({'role' : 'assistant', 'content' : correction_response_msg})
+                            print(f'Correction Response : {correction_response_msg}')
+
+                        else:
+                            gpt_idx = response_msg.find('[GPT]:')
+                            if gpt_idx == -1:
+                                updated_system_prompt = channel_intents[intent_id]['command_txt']
+                                updated_system_prompt['content'] += ' For reference, the current time is ' + str(datetime.datetime.utcnow())
+
+                                channel_intents[intent_id]['chat_msgs'].append({'role' : 'user', 'content' : 'Stay in character! Please continue as zui-botto and follow the format in those sentences'})
+                                completed = False
+                                while not completed:
+                                    try:
+                                        correction_response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + channel_intents[intent_id]['chat_msgs'])
+                                        completed = True
+                                    except:
+                                        channel_intents[intent_id]['chat_msgs'] = channel_intents[intent_id]['chat_msgs'][2:]
+                                correction_response_msg = correction_response.choices[0].message.content
+                                channel_intents[intent_id]['chat_msgs'].append({'role' : 'assistant', 'content' : '[GPT]:' + correction_response_msg[13:] + '\n\n' + correction_response_msg})
+                                print(f'Correction Response : {correction_response_msg}')
+
+                            response_msg = response_msg[botto_idx + 13:]
+
+                        restart = False
+                        attempts = 0
+                        if response_msg.find('[FILTERING]') != -1:
+                            response_msg = '<:751668390455803995:942910387282673684>'
+                        else:
+                            while response_msg.find(', ChatGPT.') != -1 or response_msg.find(', ChatGPT!') != -1 or response_msg.find(', ChatGPT?') != -1 \
+                                or response_msg.find('ChatGPT!') != -1 or response_msg.find('ChatGPT?') != -1 \
+                                or response_msg.find('\"[zui-botto]\"') != -1 or response_msg.find('\"[GPT]\"') != -1 or botto_idx < 4:
+                                attempts = attempts + 1
+                                restart = True
+                                if len(channel_intents[intent_id]['chat_msgs']) == 2:
+                                    channel_intents[intent_id]['chat_msgs'] = []
+                                    response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + [{'role' : 'user', 'content' : msg}])
+                                    response_msg = response.choices[0].message.content
+                                else:
+                                    channel_intents[intent_id]['chat_msgs'] = []
+                                    response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + [{'role' : 'user', 'content' : msg}])
+                                    response_msg = response.choices[0].message.content
+                                if attempts > 1:
+                                    response_msg = '<:751668390455803994:955646373246672966>'
+                                    break
+
+                        if restart and attempts <= 1:
+                            botto_idx = contains_botto(response_msg)
+                            # response_msg = response_msg[botto_idx + 13:]
+                            response_msg = '<:751668390455803994:955646373246672966>'
+
+                    await loading_msg.delete()
+
+                    # response_msg = response_msg + '(<@315763195727970305> <@315763195727970305> <@315763195727970305>) <- this is me doing it, not the bot'
 
                     msg_list = response_msg.split('\n')
                     num_char = 0
