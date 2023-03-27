@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    dockerfile = "Dockerfile.test"
+    dockerfile: "Dockerfile.test"
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
