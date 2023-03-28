@@ -32,6 +32,7 @@ jobs:
       - name: Build Docker image
         run: docker build -t my-image .
         working-directory: ./
+        dockerfile: ./Dockerfile
 
   deploy:
     name: Deploy app
