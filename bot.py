@@ -56,7 +56,7 @@ def init_intent():
     return {
         'chat_gpt' : True,
         'model' : 'gpt-3.5-turbo',
-        'chat_msgs' : [default_response],
+        'chat_msgs' : default_response,
         'command_txt' : {'role' : 'system', 'content' : DEFAULT_PROMPT},
         'current_token' : 0,
         'token_limit' : 1000
@@ -146,12 +146,12 @@ async def on_message(message):
                     embedVar = discord.Embed(title="New chat started!", color=0x74a89b)
                     await channel.send(embed=embedVar, reference=message, mention_author=False)
                     channel_intents[intent_id]['chat_gpt'] = True
-                    channel_intents[intent_id]['chat_msgs'] = default_response
+                    channel_intents[intent_id]['chat_msgs'] = []
                 elif cmd == 'stopchat':
                     embedVar = discord.Embed(title="Chat stopped!", color=0xf75948)
                     await channel.send(embed=embedVar, reference=message, mention_author=False)
                     channel_intents[intent_id]['chat_gpt'] = False
-                    channel_intents[intent_id]['chat_msgs'] = default_response
+                    channel_intents[intent_id]['chat_msgs'] = []
 
                 elif cmd == '!' or cmd == '!!' or cmd == '!!!' or cmd == '!!!!':
                     await channel.send('!' + cmd, reference=message, mention_author=False)
@@ -318,6 +318,7 @@ async def on_message(message):
                             restart = False
                             attempts = 0
                             if response_msg.find('[FILTERING]') != -1:
+                                channel_intents[intent_id]['chat_msgs'] = []
                                 response_msg = '<:751668390455803995:942910387282673684>'
                             else:
                                 while response_msg.find(', ChatGPT.') != -1 or response_msg.find(', ChatGPT!') != -1 or response_msg.find(', ChatGPT?') != -1 \
@@ -326,22 +327,25 @@ async def on_message(message):
                                     attempts = attempts + 1
                                     restart = True
                                     if len(channel_intents[intent_id]['chat_msgs']) == 2:
-                                        channel_intents[intent_id]['chat_msgs'] = default_response
+                                        channel_intents[intent_id]['chat_msgs'] = []
                                         response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + channel_intents[intent_id]['chat_msgs'] + [{'role' : 'user', 'content' : msg}])
                                         response_msg = response.choices[0].message.content
                                     else:
-                                        channel_intents[intent_id]['chat_msgs'] = default_response
+                                        channel_intents[intent_id]['chat_msgs'] = []
                                         response = await generate(model=channel_intents[intent_id]['model'], messages=[updated_system_prompt] + channel_intents[intent_id]['chat_msgs'] + [{'role' : 'user', 'content' : msg}])
                                         response_msg = response.choices[0].message.content
                                     if attempts > 1:
+                                        channel_intents[intent_id]['chat_msgs'] = []
                                         response_msg = '<:751668390455803994:955646373246672966>'
                                         break
 
                             if restart and attempts <= 1:
                                 botto_idx = contains_botto(response_msg)
                                 # response_msg = response_msg[botto_idx + 13:]
+                                channel_intents[intent_id]['chat_msgs'] = []
                                 response_msg = '<:751668390455803994:955646373246672966>'
                     except:
+                        channel_intents[intent_id]['chat_msgs'] = []
                         response_msg = '<:751668390455803994:955646373246672966>'
                     await loading_msg.delete()
 
