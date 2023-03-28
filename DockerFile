@@ -168,4 +168,4 @@ RUN set -eux; \
 	\
 	pip --version
 
-CMD ["python3 bot.py"]
+CMD ["python3", "bot.py"]
