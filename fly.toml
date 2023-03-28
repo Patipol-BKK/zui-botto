@@ -1,4 +1,4 @@
-# fly.toml file generated for zui-botto on 2023-03-28T08:02:01+08:00
+# fly.toml file generated for zui-botto on 2023-03-29T02:08:05+08:00
 
 app = "zui-botto"
 kill_signal = "SIGINT"
