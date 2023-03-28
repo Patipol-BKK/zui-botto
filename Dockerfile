@@ -168,4 +168,14 @@ RUN set -eux; \
 	\
 	pip --version
 
+# set working directory to /app
+WORKDIR /app
+
+# copy the contents of the current directory to /app
+COPY . /app
+
+# install dependencies
+RUN apt-get update && apt-get install -y python3
+
+# set the command to run when the container starts
 CMD ["python3", "bot.py"]
