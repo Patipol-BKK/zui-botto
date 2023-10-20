@@ -1,0 +1,18 @@
+- **Chat**
+ - `newchat`: clear all chat history in this channel
+- **Token**
+ - `total_token`: display entire chat's token usage
+ - `prev_token`: display last msg and response's token usage
+ - `token_count [Text]`: calculate token usage of a given text
+ - `token_limit`: display soft limit for total tokens
+ - `set_token_limit`: set soft limit for total tokens
+- **Model Versions**
+ - `set_gpt [GPT Version]`: set the ChatGPT model for this chat
+ - `list_gpt`: list all available models
+ - `gpt`: display current ChatGPT model used in this chat
+- **Prompt**
+ - `set_prompt [Prompt]`: set ChatGPT's prompt, leave blank to set as default ChatGPT
+ - `prompt`: display current prompt
+- **Miscellaneous**
+ - `ping`: pong!
+ - `help`: display all commands

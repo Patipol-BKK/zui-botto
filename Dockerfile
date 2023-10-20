@@ -176,6 +176,7 @@ COPY . /app
 
 # install dependencies
 RUN apt-get update && apt-get install -y python3
+RUN pip install -r requirements.txt
 
 # set the command to run when the container starts
 CMD ["python3", "bot.py"]
