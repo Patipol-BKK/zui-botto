@@ -130,6 +130,10 @@ async def on_message(message):
     cmd_tag, cmd, arg = parse_command(message.content)
     if cmd in ignore_commands:
         return
+
+    # ## Testing
+    # if guild_id != 'dm':
+    #     return
     match cmd_tag:
         case '!':
             match cmd:
@@ -261,13 +265,27 @@ async def on_message(message):
 
                 case '':
                     await channel.send('!' + cmd, reference=message, mention_author=False)
+
+                ## For ScuffedPets
+                case 'register':
+                    if arg == 'scuffpets23' and guild_id == 'dm':
+                        success = True
+                        # try:
+                        #     if str(message.channel) == 'bot-slack1':
+                        #         success = True
+                        # except:
+                        #     pass
+
+                        if success:
+                            embedVar = discord.Embed(title=f"Commands List:", description=f'abbb', color=0xE1F5FE)
+                            await channel.send(embed=embedVar, reference=message, mention_author=False)
         case '`':
             msg = (cmd + ' ' + arg).strip()
 
-            for key in emotes_dict.keys():
-                msg = re.sub(key, emotes_dict[key], msg)
-            msg = re.sub(r"<:\(", "(", msg)
-            msg = re.sub(":[0-9]*>", "", msg)
+            # for key in emotes_dict.keys():
+            #     msg = re.sub(key, emotes_dict[key], msg)
+            # msg = re.sub(r"<:\(", "(", msg)
+            # msg = re.sub(":[0-9]*>", "", msg)
 
             current_chat_msgs = channel_intents[intent_id]['chat_msgs'] + [{'role' : 'user', 'content' : msg}]
             loading_msg = await channel.send('<a:pluzzlel:959061506568364042>', reference=message, mention_author=False)
@@ -303,6 +321,8 @@ async def on_message(message):
                 await loading_msg.delete()
                 error = True
 
+            # print(f'Response: {response.choices[0].message.content}')
+
             try:
                 if not error:
                     cumulated_msg = ''
@@ -330,6 +350,7 @@ async def on_message(message):
                         try:
                             # Update response for the last time
                             text_list = markdown_to_text(cumulated_msg, 2000)
+                            
                             text_idx = 0
                             # Update sent msgs with new responses
                             for response_reference in response_references:

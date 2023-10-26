@@ -53,7 +53,25 @@ def parse_text_segment(text_segment):
 
         for child in text_segment['children']:
             parsed_text += parse_text_segment(child)['text_content']
-            
+
+    # Users, Roles, and Channels
+    elif text_segment['node_type'] == 'USER':
+        parsed_text = f'<@{text_segment["discord_id"]}>'
+    elif text_segment['node_type'] == 'ROLE':
+        parsed_text = f'<@&{text_segment["discord_id"]}>'
+    elif text_segment['node_type'] == 'CHANNEL':
+        parsed_text = f'<#{text_segment["discord_id"]}>'
+
+    # urls
+    elif text_segment['node_type'] == 'URL_WITH_PREVIEW':
+        parsed_text = f'{text_segment["url"]}'
+    elif text_segment['node_type'] == 'URL_WITHOUT_PREVIEW':
+        parsed_text = f'{text_segment["url"]}'
+
+    # emote
+    elif text_segment['node_type'] == 'EMOJI_CUSTOM':
+        parsed_text = f'<:{text_segment["emoji_name"]}:{text_segment["emoji_id"]}>'
+    
     return {
         'node_type': node_type,
         'code_lang': code_lang,
